@@ -117,11 +117,18 @@ def get_param_sub_dependant(
     )
 
 
-def get_parameterless_sub_dependant(*, depends: params.Depends, path: str) -> Dependant:
+# 获取没有参数的子依赖项
+def get_parameterless_sub_dependant(
+    *, depends: params.Depends, path: str
+) -> Dependant:
+    # 断言依赖项是可调用的
     assert callable(
         depends.dependency
     ), "A parameter-less dependency must have a callable dependency"
-    return get_sub_dependant(depends=depends, dependency=depends.dependency, path=path)
+    # 返回子依赖项
+    return get_sub_dependant(
+        depends=depends, dependency=depends.dependency, path=path
+    )
 
 
 def get_sub_dependant(
@@ -190,7 +197,9 @@ def get_flat_dependant(
         flat_dependant.header_params.extend(flat_sub.header_params)
         flat_dependant.cookie_params.extend(flat_sub.cookie_params)
         flat_dependant.body_params.extend(flat_sub.body_params)
-        flat_dependant.security_requirements.extend(flat_sub.security_requirements)
+        flat_dependant.security_requirements.extend(
+            flat_sub.security_requirements
+        )
     return flat_dependant
 
 
@@ -240,53 +249,67 @@ def get_typed_return_annotation(call: Callable[..., Any]) -> Any:
 
 def get_dependant(
     *,
-    path: str,
-    call: Callable[..., Any],
-    name: Optional[str] = None,
-    security_scopes: Optional[List[str]] = None,
-    use_cache: bool = True,
+    path: str,  # 路径
+    call: Callable[..., Any],  # 调用
+    name: Optional[str] = None,  # 名称
+    security_scopes: Optional[List[str]] = None,  # 安全范围
+    use_cache: bool = True,  # 是否使用缓存
 ) -> Dependant:
-    path_param_names = get_path_param_names(path)
-    endpoint_signature = get_typed_signature(call)
-    signature_params = endpoint_signature.parameters
+    """
+    获取依赖项
+
+    :param path: 路径
+    :param call: 调用
+    :param name: 名称
+    :param security_scopes: 安全范围
+    :param use_cache: 是否使用缓存
+    :return: 依赖项
+    """
+    path_param_names = get_path_param_names(path)  # 获取路径参数名
+    endpoint_signature = get_typed_signature(call)  # 获取函数签名
+    signature_params = endpoint_signature.parameters  # 获取函数参数
     dependant = Dependant(
         call=call,
         name=name,
         path=path,
         security_scopes=security_scopes,
         use_cache=use_cache,
-    )
+    )  # 创建依赖项
     for param_name, param in signature_params.items():
-        is_path_param = param_name in path_param_names
+        is_path_param = param_name in path_param_names  # 判断是否为路径参数
         type_annotation, depends, param_field = analyze_param(
             param_name=param_name,
             annotation=param.annotation,
             value=param.default,
             is_path_param=is_path_param,
-        )
-        if depends is not None:
+        )  # 分析参数
+        if depends is not None:  # 如果参数有依赖项
             sub_dependant = get_param_sub_dependant(
                 param_name=param_name,
                 depends=depends,
                 path=path,
                 security_scopes=security_scopes,
-            )
-            dependant.dependencies.append(sub_dependant)
+            )  # 获取依赖项
+            dependant.dependencies.append(sub_dependant)  # 添加依赖项
             continue
         if add_non_field_param_to_dependency(
             param_name=param_name,
             type_annotation=type_annotation,
             dependant=dependant,
-        ):
+        ):  # 如果参数不是字段
             assert (
                 param_field is None
             ), f"Cannot specify multiple FastAPI annotations for {param_name!r}"
             continue
         assert param_field is not None
-        if is_body_param(param_field=param_field, is_path_param=is_path_param):
-            dependant.body_params.append(param_field)
+        if is_body_param(
+            param_field=param_field, is_path_param=is_path_param
+        ):  # 如果参数是请求体参数
+            dependant.body_params.append(param_field)  # 添加请求体参数
         else:
-            add_param_to_fields(field=param_field, dependant=dependant)
+            add_param_to_fields(
+                field=param_field, dependant=dependant
+            )  # 添加其他参数
     return dependant
 
 
@@ -342,9 +365,9 @@ def analyze_param(
             if isinstance(arg, (params.Param, params.Body, params.Depends))
         ]
         if fastapi_specific_annotations:
-            fastapi_annotation: Union[
-                FieldInfo, params.Depends, None
-            ] = fastapi_specific_annotations[-1]
+            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (
+                fastapi_specific_annotations[-1]
+            )
         else:
             fastapi_annotation = None
         if isinstance(fastapi_annotation, FieldInfo):
@@ -352,12 +375,17 @@ def analyze_param(
             field_info = copy_field_info(
                 field_info=fastapi_annotation, annotation=use_annotation
             )
-            assert field_info.default is Undefined or field_info.default is Required, (
+            assert (
+                field_info.default is Undefined
+                or field_info.default is Required
+            ), (
                 f"`{field_info.__class__.__name__}` default value cannot be set in"
                 f" `Annotated` for {param_name!r}. Set the default value with `=` instead."
             )
             if value is not inspect.Signature.empty:
-                assert not is_path_param, "Path parameters cannot have default values"
+                assert (
+                    not is_path_param
+                ), "Path parameters cannot have default values"
                 field_info.default = value
             else:
                 field_info.default = Required
@@ -399,12 +427,16 @@ def analyze_param(
             SecurityScopes,
         ),
     ):
-        assert depends is None, f"Cannot specify `Depends` for type {type_annotation!r}"
+        assert (
+            depends is None
+        ), f"Cannot specify `Depends` for type {type_annotation!r}"
         assert (
             field_info is None
         ), f"Cannot specify FastAPI annotation for type {type_annotation!r}"
     elif field_info is None and depends is None:
-        default_value = value if value is not inspect.Signature.empty else Required
+        default_value = (
+            value if value is not inspect.Signature.empty else Required
+        )
         if is_path_param:
             # We might check here that `default_value is Required`, but the fact is that the same
             # parameter might sometimes be a path parameter and sometimes not. See
@@ -413,11 +445,17 @@ def analyze_param(
         elif is_uploadfile_or_nonable_uploadfile_annotation(
             type_annotation
         ) or is_uploadfile_sequence_annotation(type_annotation):
-            field_info = params.File(annotation=use_annotation, default=default_value)
+            field_info = params.File(
+                annotation=use_annotation, default=default_value
+            )
         elif not field_annotation_is_scalar(annotation=type_annotation):
-            field_info = params.Body(annotation=use_annotation, default=default_value)
+            field_info = params.Body(
+                annotation=use_annotation, default=default_value
+            )
         else:
-            field_info = params.Query(annotation=use_annotation, default=default_value)
+            field_info = params.Query(
+                annotation=use_annotation, default=default_value
+            )
 
     field = None
     if field_info is not None:
@@ -436,7 +474,9 @@ def analyze_param(
             field_info,
             param_name,
         )
-        if not field_info.alias and getattr(field_info, "convert_underscores", None):
+        if not field_info.alias and getattr(
+            field_info, "convert_underscores", None
+        ):
             alias = param_name.replace("_", "-")
         else:
             alias = field_info.alias or param_name
@@ -512,7 +552,10 @@ def is_gen_callable(call: Callable[..., Any]) -> bool:
 
 
 async def solve_generator(
-    *, call: Callable[..., Any], stack: AsyncExitStack, sub_values: Dict[str, Any]
+    *,
+    call: Callable[..., Any],
+    stack: AsyncExitStack,
+    sub_values: Dict[str, Any],
 ) -> Any:
     if is_gen_callable(call):
         cm = contextmanager_in_threadpool(contextmanager(call)(**sub_values))
@@ -529,7 +572,9 @@ async def solve_dependencies(
     background_tasks: Optional[StarletteBackgroundTasks] = None,
     response: Optional[Response] = None,
     dependency_overrides_provider: Optional[Any] = None,
-    dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,
+    dependency_cache: Optional[
+        Dict[Tuple[Callable[..., Any], Tuple[str]], Any]
+    ] = None,
     async_exit_stack: AsyncExitStack,
 ) -> Tuple[
     Dict[str, Any],
@@ -547,6 +592,7 @@ async def solve_dependencies(
     dependency_cache = dependency_cache or {}
     sub_dependant: Dependant
     for sub_dependant in dependant.dependencies:
+        # 处理dependency_cache 和获取对应的values
         sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)
         sub_dependant.cache_key = cast(
             Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key
@@ -557,6 +603,7 @@ async def solve_dependencies(
             dependency_overrides_provider
             and dependency_overrides_provider.dependency_overrides
         ):
+
             original_call = sub_dependant.call
             call = getattr(
                 dependency_overrides_provider, "dependency_overrides", {}
@@ -590,13 +637,18 @@ async def solve_dependencies(
         if sub_errors:
             errors.extend(sub_errors)
             continue
-        if sub_dependant.use_cache and sub_dependant.cache_key in dependency_cache:
+        if (
+            sub_dependant.use_cache
+            and sub_dependant.cache_key in dependency_cache
+        ):
             solved = dependency_cache[sub_dependant.cache_key]
         elif is_gen_callable(call) or is_async_gen_callable(call):
+            # 是生成器函数或者是异步生成器函数
             solved = await solve_generator(
                 call=call, stack=async_exit_stack, sub_values=sub_values
             )
         elif is_coroutine_callable(call):
+            # 是异步函数
             solved = await call(**sub_values)
         else:
             solved = await run_in_threadpool(call, **sub_values)
@@ -604,6 +656,7 @@ async def solve_dependencies(
             values[sub_dependant.name] = solved
         if sub_dependant.cache_key not in dependency_cache:
             dependency_cache[sub_dependant.cache_key] = solved
+
     path_values, path_errors = request_params_to_args(
         dependant.path_params, request.path_params
     )
@@ -677,7 +730,9 @@ def request_params_to_args(
         if isinstance(errors_, ErrorWrapper):
             errors.append(errors_)
         elif isinstance(errors_, list):
-            new_errors = _regenerate_error_with_loc(errors=errors_, loc_prefix=())
+            new_errors = _regenerate_error_with_loc(
+                errors=errors_, loc_prefix=()
+            )
             errors.extend(new_errors)
         else:
             values[field.name] = v_
@@ -707,7 +762,9 @@ async def request_body_to_args(
 
             value: Optional[Any] = None
             if received_body is not None:
-                if (is_sequence_field(field)) and isinstance(received_body, FormData):
+                if (is_sequence_field(field)) and isinstance(
+                    received_body, FormData
+                ):
                     value = received_body.getlist(field.alias)
                 else:
                     try:
@@ -793,9 +850,15 @@ def get_body_field(*, dependant: Dependant, name: str) -> Optional[ModelField]:
     }
     if not required:
         BodyFieldInfo_kwargs["default"] = None
-    if any(isinstance(f.field_info, params.File) for f in flat_dependant.body_params):
+    if any(
+        isinstance(f.field_info, params.File)
+        for f in flat_dependant.body_params
+    ):
         BodyFieldInfo: Type[params.Body] = params.File
-    elif any(isinstance(f.field_info, params.Form) for f in flat_dependant.body_params):
+    elif any(
+        isinstance(f.field_info, params.Form)
+        for f in flat_dependant.body_params
+    ):
         BodyFieldInfo = params.Form
     else:
         BodyFieldInfo = params.Body

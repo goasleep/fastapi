@@ -80,7 +80,9 @@ def _prepare_response_content(
     exclude_none: bool = False,
 ) -> Any:
     if isinstance(res, BaseModel):
-        read_with_orm_mode = getattr(_get_model_config(res), "read_with_orm_mode", None)
+        read_with_orm_mode = getattr(
+            _get_model_config(res), "read_with_orm_mode", None
+        )
         if read_with_orm_mode:
             # Let from_orm extract the data from this model instead of converting
             # it now to a dict.
@@ -142,7 +144,9 @@ async def serialize_response(
                 exclude_none=exclude_none,
             )
         if is_coroutine:
-            value, errors_ = field.validate(response_content, {}, loc=("response",))
+            value, errors_ = field.validate(
+                response_content, {}, loc=("response",)
+            )
         else:
             value, errors_ = await run_in_threadpool(
                 field.validate, response_content, {}, loc=("response",)
@@ -197,7 +201,9 @@ def get_request_handler(
     dependant: Dependant,
     body_field: Optional[ModelField] = None,
     status_code: Optional[int] = None,
-    response_class: Union[Type[Response], DefaultPlaceholder] = Default(JSONResponse),
+    response_class: Union[Type[Response], DefaultPlaceholder] = Default(
+        JSONResponse
+    ),
     response_field: Optional[ModelField] = None,
     response_model_include: Optional[IncEx] = None,
     response_model_exclude: Optional[IncEx] = None,
@@ -209,7 +215,9 @@ def get_request_handler(
 ) -> Callable[[Request], Coroutine[Any, Any, Response]]:
     assert dependant.call is not None, "dependant.call must be a function"
     is_coroutine = asyncio.iscoroutinefunction(dependant.call)
-    is_body_form = body_field and isinstance(body_field.field_info, params.Form)
+    is_body_form = body_field and isinstance(
+        body_field.field_info, params.Form
+    )
     if isinstance(response_class, DefaultPlaceholder):
         actual_response_class: Type[Response] = response_class.value
     else:
@@ -228,15 +236,22 @@ def get_request_handler(
                         body_bytes = await request.body()
                         if body_bytes:
                             json_body: Any = Undefined
-                            content_type_value = request.headers.get("content-type")
+                            content_type_value = request.headers.get(
+                                "content-type"
+                            )
                             if not content_type_value:
                                 json_body = await request.json()
                             else:
                                 message = email.message.Message()
                                 message["content-type"] = content_type_value
-                                if message.get_content_maintype() == "application":
+                                if (
+                                    message.get_content_maintype()
+                                    == "application"
+                                ):
                                     subtype = message.get_content_subtype()
-                                    if subtype == "json" or subtype.endswith("+json"):
+                                    if subtype == "json" or subtype.endswith(
+                                        "+json"
+                                    ):
                                         json_body = await request.json()
                             if json_body != Undefined:
                                 body = json_body
@@ -261,7 +276,8 @@ def get_request_handler(
                 raise
             except Exception as e:
                 http_error = HTTPException(
-                    status_code=400, detail="There was an error parsing the body"
+                    status_code=400,
+                    detail="There was an error parsing the body",
                 )
                 raise http_error from e
             errors: List[Any] = []
@@ -273,26 +289,36 @@ def get_request_handler(
                     dependency_overrides_provider=dependency_overrides_provider,
                     async_exit_stack=async_exit_stack,
                 )
-                values, errors, background_tasks, sub_response, _ = solved_result
+                values, errors, background_tasks, sub_response, _ = (
+                    solved_result
+                )
                 if not errors:
                     raw_response = await run_endpoint_function(
-                        dependant=dependant, values=values, is_coroutine=is_coroutine
+                        dependant=dependant,
+                        values=values,
+                        is_coroutine=is_coroutine,
                     )
                     if isinstance(raw_response, Response):
                         if raw_response.background is None:
                             raw_response.background = background_tasks
                         response = raw_response
                     else:
-                        response_args: Dict[str, Any] = {"background": background_tasks}
+                        response_args: Dict[str, Any] = {
+                            "background": background_tasks
+                        }
                         # If status_code was set, use it, otherwise use the default from the
                         # response class, in the case of redirect it's 307
                         current_status_code = (
-                            status_code if status_code else sub_response.status_code
+                            status_code
+                            if status_code
+                            else sub_response.status_code
                         )
                         if current_status_code is not None:
                             response_args["status_code"] = current_status_code
                         if sub_response.status_code:
-                            response_args["status_code"] = sub_response.status_code
+                            response_args["status_code"] = (
+                                sub_response.status_code
+                            )
                         content = await serialize_response(
                             field=response_field,
                             response_content=raw_response,
@@ -304,8 +330,12 @@ def get_request_handler(
                             exclude_none=response_model_exclude_none,
                             is_coroutine=is_coroutine,
                         )
-                        response = actual_response_class(content, **response_args)
-                        if not is_body_allowed_for_status_code(response.status_code):
+                        response = actual_response_class(
+                            content, **response_args
+                        )
+                        if not is_body_allowed_for_status_code(
+                            response.status_code
+                        ):
                             response.body = b""
                         response.headers.raw.extend(sub_response.headers.raw)
             if errors:
@@ -343,8 +373,12 @@ def get_websocket_app(
             )
             values, errors, _, _2, _3 = solved_result
             if errors:
-                raise WebSocketRequestValidationError(_normalize_errors(errors))
-            assert dependant.call is not None, "dependant.call must be a function"
+                raise WebSocketRequestValidationError(
+                    _normalize_errors(errors)
+                )
+            assert (
+                dependant.call is not None
+            ), "dependant.call must be a function"
             await dependant.call(**values)
 
     return app
@@ -364,12 +398,18 @@ class APIWebSocketRoute(routing.WebSocketRoute):
         self.endpoint = endpoint
         self.name = get_name(endpoint) if name is None else name
         self.dependencies = list(dependencies or [])
-        self.path_regex, self.path_format, self.param_convertors = compile_path(path)
-        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)
+        self.path_regex, self.path_format, self.param_convertors = (
+            compile_path(path)
+        )
+        self.dependant = get_dependant(
+            path=self.path_format, call=self.endpoint
+        )
         for depends in self.dependencies[::-1]:
             self.dependant.dependencies.insert(
                 0,
-                get_parameterless_sub_dependant(depends=depends, path=self.path_format),
+                get_parameterless_sub_dependant(
+                    depends=depends, path=self.path_format
+                ),
             )
 
         self.app = websocket_session(
@@ -449,14 +489,16 @@ class APIRoute(routing.Route):
         self.tags = tags or []
         self.responses = responses or {}
         self.name = get_name(endpoint) if name is None else name
-        self.path_regex, self.path_format, self.param_convertors = compile_path(path)
+        self.path_regex, self.path_format, self.param_convertors = (
+            compile_path(path)
+        )
         if methods is None:
             methods = ["GET"]
         self.methods: Set[str] = {method.upper() for method in methods}
         if isinstance(generate_unique_id_function, DefaultPlaceholder):
-            current_generate_unique_id: Callable[
-                ["APIRoute"], str
-            ] = generate_unique_id_function.value
+            current_generate_unique_id: Callable[["APIRoute"], str] = (
+                generate_unique_id_function.value
+            )
         else:
             current_generate_unique_id = generate_unique_id_function
         self.unique_id = self.operation_id or current_generate_unique_id(self)
@@ -482,44 +524,73 @@ class APIRoute(routing.Route):
             # By being a new field, no inheritance will be passed as is. A new model
             # will always be created.
             # TODO: remove when deprecating Pydantic v1
-            self.secure_cloned_response_field: Optional[
-                ModelField
-            ] = create_cloned_field(self.response_field)
+            self.secure_cloned_response_field: Optional[ModelField] = (
+                create_cloned_field(self.response_field)
+            )
         else:
             self.response_field = None  # type: ignore
             self.secure_cloned_response_field = None
         self.dependencies = list(dependencies or [])
-        self.description = description or inspect.cleandoc(self.endpoint.__doc__ or "")
+        self.description = description or inspect.cleandoc(
+            self.endpoint.__doc__ or ""
+        )
         # if a "form feed" character (page break) is found in the description text,
         # truncate description text to the content preceding the first "form feed"
+        # 去除描述中的换页符
         self.description = self.description.split("\f")[0].strip()
         response_fields = {}
+        # 遍历所有响应，生成响应字段
         for additional_status_code, response in self.responses.items():
-            assert isinstance(response, dict), "An additional response must be a dict"
+            assert isinstance(
+                response, dict
+            ), "An additional response must be a dict"
             model = response.get("model")
             if model:
+                # 确保状态码不允许响应体
                 assert is_body_allowed_for_status_code(
                     additional_status_code
                 ), f"Status code {additional_status_code} must not have a response body"
-                response_name = f"Response_{additional_status_code}_{self.unique_id}"
-                response_field = create_response_field(name=response_name, type_=model)
+                # 生成响应字段名
+                response_name = (
+                    f"Response_{additional_status_code}_{self.unique_id}"
+                )
+                # 生成响应字段
+                response_field = create_response_field(
+                    name=response_name, type_=model
+                )
                 response_fields[additional_status_code] = response_field
+        # 如果有响应字段，将其赋值给self.response_fields
         if response_fields:
-            self.response_fields: Dict[Union[int, str], ModelField] = response_fields
+            self.response_fields: Dict[Union[int, str], ModelField] = (
+                response_fields
+            )
         else:
             self.response_fields = {}
 
+        # 确保endpoint是可调用的
         assert callable(endpoint), "An endpoint must be a callable"
-        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)
+        # 生成依赖项
+        self.dependant = get_dependant(
+            path=self.path_format, call=self.endpoint
+        )
+        # 将依赖项插入到self.dependant.dependencies中
         for depends in self.dependencies[::-1]:
             self.dependant.dependencies.insert(
                 0,
-                get_parameterless_sub_dependant(depends=depends, path=self.path_format),
+                get_parameterless_sub_dependant(
+                    depends=depends, path=self.path_format
+                ),
             )
-        self.body_field = get_body_field(dependant=self.dependant, name=self.unique_id)
+        # 生成请求体字段
+        self.body_field = get_body_field(
+            dependant=self.dependant, name=self.unique_id
+        )
+        # 生成app
         self.app = request_response(self.get_route_handler())
 
-    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+    def get_route_handler(
+        self,
+    ) -> Callable[[Request], Coroutine[Any, Any, Response]]:
         return get_request_handler(
             dependant=self.dependant,
             body_field=self.body_field,
@@ -572,7 +643,9 @@ class APIRouter(routing.Router):
     def __init__(
         self,
         *,
-        prefix: Annotated[str, Doc("An optional path prefix for the router.")] = "",
+        prefix: Annotated[
+            str, Doc("An optional path prefix for the router.")
+        ] = "",
         tags: Annotated[
             Optional[List[Union[str, Enum]]],
             Doc(
@@ -1073,7 +1146,9 @@ class APIRouter(routing.Router):
         self,
         router: Annotated["APIRouter", Doc("The `APIRouter` to include.")],
         *,
-        prefix: Annotated[str, Doc("An optional path prefix for the router.")] = "",
+        prefix: Annotated[
+            str, Doc("An optional path prefix for the router.")
+        ] = "",
         tags: Annotated[
             Optional[List[Union[str, Enum]]],
             Doc(
@@ -1260,7 +1335,9 @@ class APIRouter(routing.Router):
                     description=route.description,
                     response_description=route.response_description,
                     responses=combined_responses,
-                    deprecated=route.deprecated or deprecated or self.deprecated,
+                    deprecated=route.deprecated
+                    or deprecated
+                    or self.deprecated,
                     methods=route.methods,
                     operation_id=route.operation_id,
                     response_model_include=route.response_model_include,
